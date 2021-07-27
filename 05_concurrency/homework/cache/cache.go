@@ -31,51 +31,47 @@ func (container *valueContainter) updateExpirationTime(ttl time.Duration) {
 
 type SimpleCache struct {
 	storage map[string]valueContainter
-	mu      sync.Locker
-	quit    chan interface{}
+	mu      sync.RWMutex
+	done    chan struct{}
 }
 
 // constructor for SimpleCache
 func NewSimpleCache(invalidationPeriod time.Duration) *SimpleCache {
 	cache := &SimpleCache{
 		storage: make(map[string]valueContainter),
-		quit:    make(chan interface{}),
-		mu:      &sync.Mutex{},
+		done:    make(chan struct{}),
 	}
 	go runInvalidation(cache, invalidationPeriod)
 	return cache
 }
 
 func (cache *SimpleCache) Get(key string) (interface{}, bool) {
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
-
+	cache.mu.RLock()
 	container, ok := cache.storage[key]
-	if !ok {
-		return nil, false
-	}
-
-	if container.isExpired() {
+	cache.mu.RUnlock()
+	
+	if !ok || container.isExpired(){
 		return nil, false
 	}
 
 	container.updateExpirationTime(container.ttl)
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
 	cache.storage[key] = container
 	return container.value, true
 }
 
 func (cache *SimpleCache) Set(key string, value interface{}, ttl time.Duration) {
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
+	cache.mu.RLock()
+	tmpContainer := cache.storage[key]
+	cache.mu.RUnlock()
 
-	tmpContainer, ok := cache.storage[key]
-
-	if !ok {
-		tmpContainer = valueContainter{}
-	}
 	tmpContainer.value = value
 	tmpContainer.ttl = ttl
 	tmpContainer.updateExpirationTime(ttl)
+	
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
 	cache.storage[key] = tmpContainer
 }
 
@@ -86,7 +82,7 @@ func (cache *SimpleCache) Delete(key string) {
 }
 
 func (cache *SimpleCache) Stop() {
-	close(cache.quit)
+	close(cache.done)
 }
 
 func (cache *SimpleCache) invalidateExpired() {
@@ -107,10 +103,8 @@ func runInvalidation(cache *SimpleCache, invalidationPeriod time.Duration) {
 		select {
 		case <-ticker.C:
 			cache.invalidateExpired()
-		case _, ok := <-cache.quit:
-			if !ok {
-				return
-			}
+		case <-cache.done:
+			return
 		}
 	}
 
