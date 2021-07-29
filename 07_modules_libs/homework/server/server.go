@@ -17,18 +17,19 @@ func getTickerStat(w http.ResponseWriter, r *http.Request) {
 	stockStat, err := stock.GetStockStat(ticker, apiKey)
 	if err != nil {
 		log.Printf("Cannot get stock data for %v - %v", ticker, err)
-		http.Error(w, fmt.Errorf("the ticker %v has not been found", ticker).Error(), 404)
+		http.Error(w, fmt.Errorf("the ticker %v has not been found", ticker).Error(), http.StatusNotFound)
 		return
 	}
 	payload, err := json.Marshal(stockStat)
 	if err != nil {
 		log.Printf("Unable to marshal ticker %v - %v", ticker, err)
 		http.Error(w, err.Error(), 500)
-	} else {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintln(w, string(payload))
-		log.Printf("Successful response for %v ticker", ticker)
+		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintln(w, string(payload))
+	log.Printf("Successful response for %v ticker", ticker)
 }
 
 func getAPIKey() string {

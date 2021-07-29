@@ -23,27 +23,27 @@ func GetStockStat(stockTicker string, apiKey string) (*StockStat, error) {
 	)
 	response, err := http.Get(url)
 	if err != nil {
-		return &StockStat{}, err
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
 		errorMessage, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			return &StockStat{}, err
+			return nil, err
 		}
-		return &StockStat{}, fmt.Errorf("%v", errorMessage)
+		return nil, fmt.Errorf("%v", errorMessage)
 
 	}
 
 	rawJSON, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return &StockStat{}, err
+		return nil, err
 	}
 
 	var stockStat StockStat
 	if err := json.Unmarshal(rawJSON, &stockStat); err != nil {
-		return &StockStat{}, err
+		return nil, err
 	}
 
 	return &stockStat, nil
